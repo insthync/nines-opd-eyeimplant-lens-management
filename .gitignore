@@ -11,3 +11,4 @@ exports/
 *.log
 node_modules/
 .test-artifacts/
+.zcode/

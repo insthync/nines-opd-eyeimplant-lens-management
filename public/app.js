@@ -1,161 +1,200 @@
+// App shell: session handling, sidebar navigation and the management dashboard.
 (() => {
-  const $ = (selector) => document.querySelector(selector);
-  const roles = { viewer: "ผู้ชม", editor: "ผู้แก้ไข", admin: "ผู้ดูแล" };
-  const statuses = { todo: "รอดำเนินการ", doing: "กำลังดำเนินการ", done: "เสร็จแล้ว" };
-  const state = { view: "items", page: 1, total: 0, pages: 1, records: [], editing: null, deleting: null, search: "", status: "", generation: 0 };
-  const canWrite = () => API.user?.active && ["admin", "editor"].includes(API.user.role);
-  const endpoint = () => `/api/collections/${state.view === "users" ? "users" : encodeURIComponent(APP_CONFIG.collection)}/records`;
-  const quoted = (value) => JSON.stringify(String(value));
-  function node(tag, className, content) {
-    const element = document.createElement(tag);
-    if (className) element.className = className;
-    if (content !== undefined) element.textContent = content;
-    return element;
+  const { $, node, badge, quoted, localDate, daysUntil, readiness } = UI;
+
+  const VIEW_META = {
+    dashboard: { eyebrow: "ภาพรวมระบบ", title: "แดชบอร์ด", description: "สถานะ Case คลัง และสิ่งที่ต้องดำเนินการวันนี้" },
+    cases: { eyebrow: "งานผ่าตัด", title: "ตารางผ่าตัด", description: "จัดการ Case และติดตามความพร้อมของ Implant ก่อนวันผ่าตัด" },
+    reservations: { eyebrow: "งานผ่าตัด", title: "การจอง Implant", description: "ตรวจสอบ 2 คน ยืนยันการจอง และบันทึกการใช้งานจริง" },
+    usage: { eyebrow: "งานผ่าตัด", title: "การใช้งาน & Traceability", description: "ประวัติการใช้ Implant และการตรวจสอบย้อนกลับถึงผู้ป่วย" },
+    inventory: { eyebrow: "คลัง", title: "คลัง & Stock", description: "ติดตามจำนวนจริง ที่จอง คงเหลือ และวันหมดอายุของทุก Lot" },
+    masters: { eyebrow: "การตั้งค่า", title: "ข้อมูลหลัก", description: "ผู้ป่วย Implant Master ร้านค้า แพทย์ และหัตถการ" },
+    members: { eyebrow: "การตั้งค่า", title: "จัดการสมาชิก", description: "กำหนดสิทธิ์และจัดการสถานะบัญชีของทีม" },
+  };
+  let generation = 0;
+
+  function closeDrawer() {
+    $("#sidebar").classList.remove("open");
+    $("#nav-backdrop").hidden = true;
   }
-  function tell(text) { $("#notice").textContent = text; }
+
   function sessionUI() {
     const loggedIn = Boolean(API.user?.active);
     $("#login-panel").hidden = loggedIn;
     $("#workspace").hidden = !loggedIn;
     $("#account").hidden = !loggedIn;
-    $("#users-tab").hidden = API.user?.role !== "admin";
-    $("#add-case-button").hidden = !canWrite() || state.view !== "items";
-    $("#account-name").textContent = loggedIn ? `${API.user.name} · ${roles[API.user.role] || ""}` : "";
+    $("#menu-toggle").hidden = !loggedIn;
+    $("#members-nav").hidden = !UI.isAdmin();
+    $("#add-case-button").hidden = !(currentViewIs("cases") && UI.canWrite());
+    $("#account-name").textContent = loggedIn ? `${API.user.name} · ${LABELS.roles[API.user.role] || ""}` : "";
     if (!loggedIn) {
-      state.generation++;
-      state.records = [];
-      $("#records").replaceChildren();
+      generation++;
+      closeDrawer();
       document.querySelectorAll("dialog[open]").forEach((dialog) => dialog.close());
     }
   }
+
+  const currentViewIs = (view) => {
+    const selected = document.querySelector(".nav-item.selected");
+    return selected?.dataset.view === view;
+  };
+
   function setView(view) {
-    state.view = view; state.page = 1; state.search = ""; state.status = "";
-    $("#search").value = ""; $("#status-filter").value = "";
-    $("#status-filter-label").hidden = view === "users";
-    $("#search").placeholder = view === "users" ? "ค้นหาชื่อสมาชิก…" : "ค้นหาชื่อหรือรายละเอียด…";
-    $("#page-title").textContent = view === "users" ? "จัดการสมาชิก" : "รายการงาน";
-    $("#page-description").textContent = view === "users" ? "กำหนดสิทธิ์และจัดการสถานะบัญชีของทีม" : "เก็บรายละเอียด ติดตามสถานะ และจัดการงานในที่เดียว";
-    ["items", "users"].forEach((name) => { $(`#${name}-tab`).className = name === view ? "selected" : "quiet"; $(`#${name}-tab`).setAttribute("aria-pressed", String(name === view)); });
-    tell(""); sessionUI();
+    if (view === "members" && !UI.isAdmin()) view = "dashboard";
+    document.querySelectorAll(".view").forEach((section) => { section.hidden = section.id !== `view-${view}`; });
+    document.querySelectorAll(".nav-item").forEach((button) => {
+      const selected = button.dataset.view === view;
+      button.className = `nav-item${selected ? " selected" : ""}`;
+      button.setAttribute("aria-pressed", String(selected));
+    });
+    const meta = VIEW_META[view] || VIEW_META.dashboard;
+    $("#page-eyebrow").textContent = meta.eyebrow;
+    $("#page-title").textContent = meta.title;
+    $("#page-description").textContent = meta.description;
+    $("#add-case-button").hidden = !(view === "cases" && UI.canWrite());
+    closeDrawer();
+    generation++;
+    sessionUI();
+    if (window.Views[view]?.load) window.Views[view].load();
   }
-  async function load() {
-    const generation = ++state.generation;
-    $("#records").replaceChildren();
-    $("#list-message").textContent = "กำลังโหลดข้อมูล…";
-    $("#previous").disabled = $("#next").disabled = true;
+
+  // --- dashboard -----------------------------------------------------------------------
+  function kpiCard(value, label, kind) {
+    const card = node("div", `kpi-card ${kind || ""}`);
+    card.append(node("span", "kpi-num", String(value)), node("span", "kpi-label", label));
+    return card;
+  }
+
+  async function loadDashboard() {
+    const run = ++generation;
+    const section = $("#view-dashboard");
+    section.replaceChildren(node("p", "list-message", "กำลังโหลดข้อมูล…"));
     try {
       await API.refresh();
-      if (generation !== state.generation || !API.user) return;
-      if (state.view === "users" && API.user.role !== "admin") { setView("items"); await load(); return; }
-      sessionUI();
-      const filters = [];
-      if (state.search) filters.push(state.view === "users" ? `name ~ ${quoted(state.search)}` : `(title ~ ${quoted(state.search)} || description ~ ${quoted(state.search)})`);
-      if (state.status && state.view === "items") filters.push(`status = ${quoted(state.status)}`);
-      const params = new URLSearchParams({ page: state.page, perPage: APP_CONFIG.pageSize, sort: "-created,-id" });
-      if (filters.length) params.set("filter", filters.join(" && "));
-      const data = await API.request(`${endpoint()}?${params}`);
-      if (generation !== state.generation) return;
-      state.records = data.items; state.total = data.totalItems; state.pages = Math.max(1, data.totalPages);
-      if (state.page > state.pages) { state.page = state.pages; await load(); return; }
-      render();
+      if (run !== generation || !API.user) return;
+      const today = localDate();
+      const monthStart = `${today.slice(0, 7)}-01`;
+      const [casesData, reservationsData, lotsData, usagesData] = await Promise.all([
+        API.records("surgery_cases", { page: 1, perPage: 200, sort: "surgery_date,-created", filter: `surgery_date >= ${quoted(monthStart)}`, expand: "patient" }),
+        API.records("reservations", { page: 1, perPage: 500, sort: "-created", expand: "confirmed_lot" }),
+        API.records("stock_lots", { page: 1, perPage: 500, sort: "created", expand: "implant" }),
+        API.records("implant_usages", { page: 1, perPage: 500, sort: "-used_at", filter: `used_at >= ${quoted(`${monthStart} 00:00:00`)}`, expand: "implant" }),
+      ]);
+      if (run !== generation) return;
+
+      const reservations = reservationsData.items;
+      const upcoming = casesData.items.filter((record) => record.surgery_date >= today && !["cancelled", "completed"].includes(record.status));
+      const todayCases = upcoming.filter((record) => record.surgery_date === today);
+      let ready = 0, pending = 0, problem = 0;
+      const exceptions = [];
+      for (const caseRecord of upcoming) {
+        const state = readiness(caseRecord, reservations.filter((row) => row.case === caseRecord.id));
+        const days = daysUntil(caseRecord.surgery_date);
+        let cls = state.cls;
+        if (cls !== "ready" && days <= 1) cls = "problem";
+        if (cls === "ready") ready++;
+        else if (cls === "problem") problem++;
+        else pending++;
+        if (cls !== "ready") {
+          exceptions.push({
+            severity: days <= 1 ? "problem" : "pending",
+            text: `Case ${caseRecord.case_number} · ${caseRecord.expand?.patient?.name || "-"} · ผ่าตัด ${caseRecord.surgery_date} — ${state.label}${days === 0 ? " (ผ่าตัดวันนี้!)" : days === 1 ? " (ผ่าตัดพรุ่งนี้!)" : ""}`,
+            view: "cases",
+          });
+        }
+      }
+
+      const perImplant = new Map();
+      for (const lot of lotsData.items) {
+        const entry = perImplant.get(lot.implant) || { available: 0, implant: lot.expand?.implant };
+        entry.available += (lot.qty_physical || 0) - (lot.qty_reserved || 0);
+        perImplant.set(lot.implant, entry);
+      }
+      for (const entry of perImplant.values()) {
+        const minStock = Number(entry.implant?.min_stock || 0);
+        const code = entry.implant?.product_code || "-";
+        if (entry.available <= 0) exceptions.push({ severity: "problem", text: `${code} — 🔴 หมดสต๊อก (Out of Stock)`, view: "inventory" });
+        else if (minStock > 0 && entry.available < minStock) exceptions.push({ severity: "pending", text: `${code} — 🟡 สต๊อกต่ำ เหลือ ${entry.available} ชิ้น (ต่ำกว่า Min ${minStock})`, view: "inventory" });
+      }
+      for (const lot of lotsData.items) {
+        if (!lot.expiry) continue;
+        const available = (lot.qty_physical || 0) - (lot.qty_reserved || 0);
+        if (available <= 0) continue;
+        const days = daysUntil(lot.expiry);
+        const code = lot.expand?.implant?.product_code || "-";
+        if (days < 0) exceptions.push({ severity: "problem", text: `Lot ${lot.lot || "-"} (${code}) — 🔴 หมดอายุแล้ว (${lot.expiry})`, view: "inventory" });
+        else if (days <= 30) exceptions.push({ severity: "pending", text: `Lot ${lot.lot || "-"} (${code}) — 🟡 หมดอายุในอีก ${days} วัน (${lot.expiry})`, view: "inventory" });
+      }
+
+      const cost = usagesData.items.reduce((sum, usage) => sum + Number(usage.expand?.implant?.unit_price || 0), 0);
+      const monthCases = casesData.items.filter((record) => record.status !== "cancelled").length;
+
+      section.replaceChildren();
+      const todayHeading = node("h2", "section-heading", "วันนี้");
+      const todayGrid = node("div", "kpi-grid");
+      todayGrid.append(
+        kpiCard(todayCases.length, "ผ่าตัดวันนี้"),
+        kpiCard(ready, "พร้อมผ่าตัด", "ready"),
+        kpiCard(pending, "รอดำเนินการ", "pending"),
+        kpiCard(problem, "มีปัญหา", problem ? "problem" : ""),
+      );
+      const monthHeading = node("h2", "section-heading", "เดือนนี้");
+      const monthGrid = node("div", "kpi-grid");
+      monthGrid.append(
+        kpiCard(monthCases, "Case ทั้งเดือน"),
+        kpiCard(usagesData.totalItems, "Implant ที่ใช้"),
+        kpiCard(UI.money(cost), "มูลค่าการใช้ Implant"),
+        kpiCard(reservations.filter((row) => ["confirmed", "used"].includes(row.status)).length, "การจองที่ยืนยันแล้ว", "info"),
+      );
+      const exceptionHeading = node("h2", "section-heading", "สิ่งที่ต้องดำเนินการ (Exception Center)");
+      const exceptionCard = node("section", "panel exception-panel");
+      if (!exceptions.length) {
+        exceptionCard.append(node("p", "list-message", "✅ ไม่มีสิ่งที่ต้องดำเนินการด่วน — Case ทุกเคสพร้อม และ Stock ปกติ"));
+      } else {
+        for (const item of exceptions) {
+          const row = node("button", `exception-item ${item.severity}`);
+          row.type = "button";
+          row.append(node("span", `dot ${item.severity}`), node("span", "exception-text", item.text));
+          row.addEventListener("click", () => setView(item.view));
+          exceptionCard.append(row);
+        }
+      }
+      section.append(todayHeading, todayGrid, monthHeading, monthGrid, exceptionHeading, exceptionCard);
     } catch (error) {
-      if (generation !== state.generation) return;
-      state.records = [];
-      $("#list-message").textContent = error.message;
-      $("#page-info").textContent = "";
-      sessionUI();
+      if (run !== generation) return;
+      section.replaceChildren(node("p", "list-message", error.message));
     }
   }
-  function action(label, callback, danger = false) {
-    const button = node("button", danger ? "quiet" : "secondary", label);
-    button.type = "button"; button.addEventListener("click", callback); return button;
-  }
-  function render() {
-    $("#list-message").textContent = state.records.length ? "" : state.search || state.status ? "ไม่พบข้อมูลที่ตรงกับการค้นหา" : state.view === "items" ? "ยังไม่มีรายการ เริ่มเพิ่มรายการแรกได้เลย" : "ไม่พบสมาชิก";
-    const fragment = document.createDocumentFragment();
-    state.records.forEach((record) => {
-      const row = node("article", "record");
-      const info = node("div");
-      info.append(node("h2", "record-title", state.view === "users" ? record.name : record.title));
-      info.append(node("div", "record-meta", state.view === "users" ? `ID: ${record.id}${record.id === API.user.id ? " · บัญชีของคุณ" : ""}` : `กำหนด ${record.due_date} · จำนวน ${record.quantity}`));
-      const badge = node("span", `badge ${state.view === "users" ? record.active ? record.role : "off" : record.status}`, state.view === "users" ? `${roles[record.role]}${record.active ? "" : " · ปิดใช้งาน"}` : statuses[record.status]);
-      const actions = node("div", "record-actions");
-      if (state.view === "users") {
-        if (record.id !== API.user.id) actions.append(action("แก้ไขสมาชิก", () => openUser(record)));
-      } else {
-        actions.append(action(canWrite() ? "แก้ไข / ดู" : "ดูรายละเอียด", () => openItem(record)));
-        if (canWrite()) actions.append(action("ลบ", () => { state.deleting = record; $("#delete-name").textContent = record.title; $("#delete-error").textContent = ""; $("#delete-dialog").showModal(); }, true));
-      }
-      row.append(info, badge, actions); fragment.append(row);
-    });
-    $("#records").replaceChildren(fragment);
-    $("#page-info").textContent = `${state.total} รายการ · หน้า ${state.page} / ${state.pages}`;
-    $("#previous").disabled = state.page <= 1; $("#next").disabled = state.page >= state.pages;
-  }
-  function openItem(record = null) {
-    state.editing = record;
-    const form = $("#item-form"); form.reset();
-    const today = new Date();
-    const localDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-    const values = record || { title: "", quantity: 1, due_date: localDate, status: "todo", description: "" };
-    ["title", "quantity", "due_date", "status", "description"].forEach((key) => { form.elements[key].value = values[key]; });
-    $("#item-fields").disabled = !canWrite(); $("#save-item").hidden = !canWrite();
-    $("#item-dialog-title").textContent = !canWrite() ? "รายละเอียดรายการ" : record ? "แก้ไขรายการ" : "เพิ่มรายการ";
-    $("#item-error").textContent = ""; $("#item-dialog").showModal();
-  }
-  function openUser(record) {
-    state.editing = record;
-    const form = $("#user-form");
-    form.elements.name.value = record.name; form.elements.role.value = record.role; form.elements.active.checked = record.active;
-    $("#user-error").textContent = ""; $("#user-dialog").showModal();
-  }
-  async function submit(event, errorSelector, task) {
-    event.preventDefault();
-    const button = event.currentTarget.querySelector("button[type=submit]");
-    button.disabled = true; $(errorSelector).textContent = "";
-    try { await task(); } catch (error) { $(errorSelector).textContent = error.message; }
-    finally { button.disabled = false; }
-  }
+
+  // --- wiring --------------------------------------------------------------------------
   $("#login-form").addEventListener("submit", (event) => {
     const form = event.currentTarget;
-    submit(event, "#login-error", async () => {
+    UI.submit(event, "#login-error", async () => {
       try { await API.login(form.elements.identity.value.trim(), form.elements.password.value); }
       catch (error) { if (error.status === 400) throw new Error("อีเมลหรือรหัสผ่านไม่ถูกต้อง หรือบัญชีถูกปิดใช้งาน"); throw error; }
-      form.reset(); setView("items"); await load();
+      form.reset();
+      setView("dashboard");
     });
   });
-  $("#item-form").addEventListener("submit", (event) => {
-    const body = Object.fromEntries(new FormData(event.currentTarget));
-    body.title = body.title.trim(); body.quantity = Number(body.quantity);
-    submit(event, "#item-error", async () => {
-      const date = new Date(body.due_date + "T00:00:00Z");
-      if (!body.title || isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== body.due_date) throw new Error("กรุณาระบุชื่อและวันที่ที่ถูกต้อง");
-      await API.request(`${endpoint()}${state.editing ? `/${state.editing.id}` : ""}`, { method: state.editing ? "PATCH" : "POST", body });
-      $("#item-dialog").close(); tell("บันทึกข้อมูลแล้ว"); await load();
-    });
-  });
-  $("#user-form").addEventListener("submit", (event) => {
-    const form = event.currentTarget;
-    const body = { name: form.elements.name.value.trim(), role: form.elements.role.value, active: form.elements.active.checked };
-    submit(event, "#user-error", async () => {
-      if (!body.name) throw new Error("กรุณาระบุชื่อที่แสดง");
-      await API.request(`${endpoint()}/${state.editing.id}`, { method: "PATCH", body });
-      $("#user-dialog").close(); tell("บันทึกสมาชิกแล้ว"); await load();
-    });
-  });
-  $("#delete-form").addEventListener("submit", (event) => submit(event, "#delete-error", async () => {
-    await API.request(`${endpoint()}/${state.deleting.id}`, { method: "DELETE" });
-    $("#delete-dialog").close(); tell("ลบรายการแล้ว"); await load();
-  }));
+
   $("#logout").addEventListener("click", () => { API.logout(); sessionUI(); $("#login-error").textContent = ""; });
-  window.addEventListener("session-ended", sessionUI);
-  $("#add-case-button").addEventListener("click", () => openItem());
-  $("#items-tab").addEventListener("click", () => { setView("items"); load(); });
-  $("#users-tab").addEventListener("click", () => { setView("users"); load(); });
-  $("#search-form").addEventListener("submit", (event) => { event.preventDefault(); state.search = $("#search").value.trim(); state.status = $("#status-filter").value; state.page = 1; load(); });
-  $("#previous").addEventListener("click", () => { state.page--; load(); });
-  $("#next").addEventListener("click", () => { state.page++; load(); });
+  window.addEventListener("session-ended", () => { sessionUI(); });
+
+  document.querySelectorAll(".nav-item").forEach((button) => {
+    button.addEventListener("click", () => setView(button.dataset.view));
+  });
+  $("#menu-toggle").addEventListener("click", () => {
+    if ($("#sidebar").classList.contains("open")) closeDrawer();
+    else { $("#sidebar").classList.add("open"); $("#nav-backdrop").hidden = false; }
+  });
+  $("#nav-backdrop").addEventListener("click", closeDrawer);
+  $("#add-case-button").addEventListener("click", () => window.Views.cases.openCreate());
   document.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => document.getElementById(button.dataset.close).close()));
-  document.querySelectorAll("[data-app-name]").forEach((element) => { element.textContent = APP_CONFIG.appName; });
-  sessionUI(); if (API.token) load();
+  document.querySelectorAll("[data-app-name]").forEach((element) => { element.textContent = APP_CONFIG.appShort; });
+
+  window.Views = window.Views || {};
+  window.Views.dashboard = { load: loadDashboard };
+
+  sessionUI();
+  if (API.token) setView("dashboard");
 })();

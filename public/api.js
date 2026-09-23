@@ -1,6 +1,6 @@
 (() => {
   const base = window.APP_CONFIG.pocketBaseUrl.replace(/\/$/, "");
-  const key = `pb-crud-app-starter:${base}:session`;
+  const key = `opd-eye-implant:${base}:session`;
   let session = null;
   try { session = JSON.parse(sessionStorage.getItem(key)); } catch { sessionStorage.removeItem(key); }
   const setSession = (value) => {
@@ -18,7 +18,14 @@
     const data = response.status === 204 ? null : await response.json().catch(() => null);
     if (!response.ok) {
       if (response.status === 401) { setSession(null); window.dispatchEvent(new Event("session-ended")); }
-      const error = new Error(response.status === 401 ? "กรุณาเข้าสู่ระบบอีกครั้ง" : response.status === 403 || response.status === 404 ? "ไม่มีสิทธิ์ดำเนินการหรือไม่พบข้อมูล" : "ข้อมูลไม่ถูกต้องหรือไม่สามารถบันทึกได้ กรุณาตรวจสอบแล้วลองใหม่");
+      const message = typeof data?.message === "string" ? data.message : "";
+      const hasThai = /[\u0E00-\u0E7F]/.test(message);
+      const error = new Error(
+        response.status === 401 ? "กรุณาเข้าสู่ระบบอีกครั้ง"
+        : response.status === 403 || response.status === 404 ? "ไม่มีสิทธิ์ดำเนินการหรือไม่พบข้อมูล"
+        : hasThai ? message
+        : "ข้อมูลไม่ถูกต้องหรือไม่สามารถบันทึกได้ กรุณาตรวจสอบแล้วลองใหม่",
+      );
       error.status = response.status;
       error.details = data;
       throw error;
@@ -37,5 +44,15 @@
       setSession(value);
     },
     logout() { setSession(null); },
+    records(collection, params = {}) {
+      const search = new URLSearchParams({ page: params.page || 1, perPage: params.perPage || window.APP_CONFIG.pageSize });
+      if (params.sort) search.set("sort", params.sort);
+      if (params.filter) search.set("filter", params.filter);
+      if (params.expand) search.set("expand", params.expand);
+      return request(`/api/collections/${encodeURIComponent(collection)}/records?${search}`);
+    },
+    workflow(action, body) {
+      return request(`/api/eyeimplant/${encodeURIComponent(action)}`, { method: "POST", body: body || {} });
+    },
   };
 })();

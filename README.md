@@ -1,8 +1,10 @@
-# pb-crud-app-starter
+# OPD Eye Implant & Lens Management
 
-ชุดเริ่มต้นเว็บภาษาไทย: HTML/CSS/JavaScript + PocketBase 0.39.8 + SQLite ไม่มี framework หรือขั้นตอน build
+ระบบบริหาร Implant และ Lens คลินิกจักษุ (ภาษาไทย): HTML/CSS/JavaScript + PocketBase 0.39.8 + SQLite ไม่มี framework หรือขั้นตอน build
 
-มีระบบสมัครสมาชิก เข้าสู่ระบบ สิทธิ์ viewer/editor/admin หน้า admin จัดการสมาชิก และฟอร์มรายการงานที่เพิ่ม ดู แก้ไข ลบ ค้นหา กรองสถานะ และแบ่งหน้าได้
+ครอบคลุม workflow ตั้งแต่ ผู้ป่วย → Case ผ่าตัด → การจอง Implant → ตรวจสอบ 2 คน (Two-Person Verification) → ยืนยัน Case พร้อม Reserve Stock → Surgery Readiness → OR Verified → บันทึกใช้จริงและตัด Stock → Traceability/Recall โดยมี Dashboard แสดงสิ่งที่ต้องดำเนินการ (ตัดหน้า Purchase/PO Tracking และ Reports ออกตามขอบเขต)
+
+มีระบบสมัครสมาชิก เข้าสู่ระบบ สิทธิ์ viewer/editor/admin และหน้า admin จัดการสมาชิกครบถ้วน
 
 ## เริ่มใช้งานบน Windows
 
@@ -32,46 +34,56 @@ bash scripts/start-pocketbase.sh
 
 อ่าน options ด้วย `bash scripts/setup-pocketbase.sh --help` หรือ `Get-Help ./scripts/setup-pocketbase.ps1` บน Windows ตัวแปร `PB_SUPERUSER_EMAIL`, `PB_SUPERUSER_PASSWORD`, `PB_STAFF_EMAIL`, `PB_STAFF_PASSWORD`, `PB_STAFF_NAME`, `PB_STAFF_ROLE` ใช้กับ setup ได้ ห้าม commit ค่า credentials
 
+## โมดูลในแอป
+
+| เมนู | ความสามารถ |
+| --- | --- |
+| แดชบอร์ด | KPI วันนี้/เดือนนี้ (Case, พร้อม, รอ, มีปัญหา, Implant ที่ใช้, มูลค่า) และ Exception Center (Case ใกล้ผ่าตัดที่ยังไม่พร้อม, Low/Out of stock, ใกล้/หมดอายุ) กดเปิดได้ |
+| ตารางผ่าตัด | สร้าง/แก้ไข Case (เลข Case อัตโนมัติ EYE-YYYYMM-NNNN, เลือกตาจาก dropdown เท่านั้น, สร้างผู้ป่วยใหม่ในฟอร์มได้), กรองช่วงเวลา/สถานะ/ตา, ค้นหา HN/ชื่อ/เลข Case, ปุ่มดำเนินการตามสถานะ, readiness ต่อ Case |
+| การจอง Implant | เลขจองอัตโนมัติ RES-YYYYMM-NNNN, ตรวจสอบ 2 คน (ห้ามคนเดียวกัน), ยืนยันด้วย FINAL IMPLANT SAFETY CHECK 12 ข้อ + เลือก Lot พร้อมยอดคงเหลือ, บันทึกใช้จริง, ยกเลิกพร้อมคืน Stock |
+| คลัง & Stock | รับเข้า (รวม Lot เดิมอัตโนมัติ), แก้ไข Lot, สถานะ 🟢/🟡 OUT/LOW เทียบ Min stock, วันหมดอายุ 🟢/🟡/🔴 |
+| การใช้งาน & Traceability | ประวัติการใช้ทุกครั้ง, ค้นตามผู้ป่วย (HN/ชื่อ) → Implant ที่เคยได้รับ, ค้นตาม Lot/Serial → ผู้ป่วยทั้งหมดที่ได้รับ (Recall) |
+| ข้อมูลหลัก | ผู้ป่วย (HN ไม่ซ้ำ), Implant Master (Product Code ไม่ซ้ำ, ประเภท/Power/Cylinder/ราคา/Min-Max stock), ร้านค้า, แพทย์, หัตถการ |
+| จัดการสมาชิก (admin) | เปลี่ยนชื่อ/สิทธิ์/เปิดปิดบัญชีอื่น |
+
+ทุกการเปลี่ยนสถานะ (ตรวจสอบ, ยืนยัน, OR Verified, ใช้จริง, ยกเลิก, รับเข้า) ทำผ่าน server routes ที่บังคับกฎความปลอดภัย: ห้ามข้ามขั้นตอน, ห้ามใช้ Lot หมดอายุ, ห้าม Reserve เกิน Stock, แก้ไขข้อมูลสำคัญหลังยืนยันไม่ได้ และบันทึก audit log (`case_logs`) ทุกครั้ง
+
 ## สิทธิ์เริ่มต้น
 
-| ผู้ใช้ | อ่านรายการ | เพิ่ม/แก้ไข/ลบรายการ | จัดการสมาชิก |
+| ผู้ใช้ | อ่านข้อมูล | เพิ่ม/แก้ไข/ดำเนินการ | จัดการสมาชิก |
 | --- | --- | --- | --- |
 | ยังไม่เข้าสู่ระบบ | ไม่ได้ | ไม่ได้ | ไม่ได้ |
-| viewer | ได้ | ไม่ได้ | ไม่ได้ |
-| editor | ได้ | ได้ | ไม่ได้ |
-| admin | ได้ | ได้ | เปลี่ยนชื่อ/สิทธิ์/เปิดปิดบัญชีอื่น |
+| viewer | ได้ (รวมประวัติการใช้/Traceability) | ไม่ได้ | ไม่ได้ |
+| editor | ได้ | ได้ (ทุก workflow) | ไม่ได้ |
+| admin | ได้ | ได้ + ลบ Case/Lot | เปลี่ยนชื่อ/สิทธิ์/เปิดปิดบัญชีอื่น |
 
-ทุกบัญชีที่ active และเข้าสู่ระบบอ่านรายการทั้งหมดร่วมกันได้ นี่เป็นฐานสำหรับทีมเดียว ยังไม่มี tenant หรือข้อมูลส่วนตัวแยกเจ้าของ ผู้สมัครใหม่เป็น viewer เสมอ การเปลี่ยนสิทธิ์มีผลกับ API ทันที ส่วน UI จะตรวจ session ใหม่เมื่อโหลดรายการ
-
-บัญชี admin ในแอปใช้ collection `users` ไม่มีสิทธิ์ superuser ไม่สามารถแก้ไขตนเอง ลบสมาชิก เปลี่ยนรหัสผ่าน หรือเปลี่ยนอีเมลผ่านหน้า admin นี้ได้ บัญชีแรกและการกู้สิทธิ์จัดการผ่าน setup/PocketBase dashboard
+ข้อมูลใช้ร่วมกันทั้งทีม (single-team) ยังไม่มี tenant/เจ้าของแยก ผู้สมัครใหม่เป็น viewer เสมอ บัญชี admin ในแอปไม่มีสิทธิ์ superuser แก้ตนเองไม่ได้ การกู้สิทธิ์จัดการผ่าน setup/PocketBase dashboard
 
 ## โครงสร้าง
 
 ```text
 public/                    ไฟล์ที่ส่งให้ browser เท่านั้น
-  index.html               เข้าสู่ระบบ รายการงาน หน้า admin และ dialog
-  app.js                   UI, CRUD, ค้นหา และแบ่งหน้า
-  api.js                   REST client และ sessionStorage
-  config.js                ชื่อแอป URL API ชื่อ collection และขนาดหน้า
+  index.html               เข้าสู่ระบบ + ทุกโมดูล (sidebar) + dialog ของ workflow
+  app.js                   session, นำทาง และแดชบอร์ด
+  cases.js                 ตารางผ่าตัดและฟอร์ม Case
+  reservations.js          การจอง ตรวจสอบ 2 คน ยืนยัน ใช้จริง ยกเลิก
+  inventory.js             คลัง Stock รับเข้า แก้ไข Lot
+  usage.js                 ประวัติการใช้ + Traceability/Recall
+  masters.js               ข้อมูลหลัก 5 หมวด
+  members.js               หน้า admin จัดการสมาชิก
+  ui.js                    helper ใช้ร่วม (list controller, dialog builder)
+  api.js                   REST client + workflow routes + sessionStorage
+  config.js                ชื่อแอป URL API ขนาดหน้า และป้ายภาษาไทย
   register.html/js          สมัครสมาชิก
-  styles.css               หน้าจอ desktop/mobile
-pocketbase/pb_migrations/   Schema และ API rules
-pocketbase/pb_hooks/        สมัครสมาชิกและตรวจสอบข้อมูลฝั่ง server
+  styles.css               ธีมน้ำเงินคลินิก desktop/mobile
+pocketbase/pb_migrations/   Schema และ API rules (starter + ระบบ implant)
+pocketbase/pb_hooks/        workflow routes, validation, สมัครสมาชิก
 scripts/                   ดาวน์โหลด ติดตั้ง เริ่มระบบ (PowerShell/Bash)
-tests/integration.mjs       ทดสอบ API บนฐานข้อมูลชั่วคราว
-docs/                      วิธีปรับใช้และสถานะส่งต่องาน
+tests/integration.mjs       ทดสอบ API/workflow บนฐานข้อมูลชั่วคราว
+docs/                      สถาปัตยกรรม ความปลอดภัย และสถานะส่งต่องาน
 ```
 
 ให้ PocketBase serve เฉพาะ `public/` ตาม scripts ที่ให้มา ไม่ใช้ repository root เป็น public directory
-
-## นำไปสร้างโปรเจคใหม่
-
-1. ใช้ source repository นี้เป็น GitHub template หรือคัดลอก source ไป repository ใหม่ ดู [CUSTOMIZE.md](docs/CUSTOMIZE.md)
-2. เปลี่ยนชื่อแอปใน `public/config.js`, title/brand ใน HTML และเอกสาร
-3. เพิ่ม migration สำหรับ schema ที่ต้องการ แล้วปรับฟอร์ม payload และการแสดงผล
-4. รัน setup เพื่อสร้างฐานข้อมูลและบัญชีของโปรเจคใหม่
-
-ไม่คัดลอก `pb_data`, `.git`, credentials, exports หรือ backups จากโปรเจคที่มีข้อมูลอยู่แล้ว ตัว binary ไม่ถูกติดตามใน Git และดาวน์โหลดใหม่ได้ ไม่มีข้อมูลคนไข้หรือบัญชีจริงจาก OR Planning Board รวมอยู่ใน starter
 
 ## ทดสอบ
 
@@ -81,8 +93,14 @@ docs/                      วิธีปรับใช้และสถา�
 node tests/integration.mjs
 ```
 
-ต้องมี PocketBase binary ก่อน ทดสอบสร้าง database ใน OS temp directory และลบหลังจบ ไม่เปิดฐานข้อมูลจริง `--preview` จะคง test server ไว้พร้อมข้อมูลสมมติและบัญชีรหัสผ่านสุ่มเพื่อทดสอบ browser หยุดด้วย Ctrl+C
+ต้องมี PocketBase binary ก่อน ทดสอบสร้าง database ใน OS temp directory และลบหลังจบ ไม่เปิดฐานข้อมูลจริง ชุดทดสอบครอบคลุม 135 รายการ: สิทธิ์ทุก collection, workflow ครบวงจร, กันการข้ามขั้นตอน, ห้ามใช้ Lot หมดอายุ, คืน Stock เมื่อยกเลิก, Traceability 2 ทาง และ private-path
 
-ดูขอบเขตสิทธิ์และการใช้งานใน [ARCHITECTURE.md](docs/ARCHITECTURE.md), [SECURITY.md](docs/SECURITY.md) และผลตรวจล่าสุดใน [HANDOFF.md](docs/HANDOFF.md)
+`--preview` จะคง test server ไว้พร้อมข้อมูลสมมติ (ผู้ป่วย 12, Implant 9, Case 7 สถานะครบทุกขั้น, stock รวม Lot หมดอายุ) และบัญชีรหัสผ่านสุ่มเพื่อทดลองใน browser หยุดด้วย Ctrl+C
 
-Starter รุ่นนี้ใช้ฟอร์มที่กำหนดในโค้ด ยังไม่มี Form Builder, email verification/reset flow, audit log, CI หรือชุด deploy production สำเร็จรูป
+```powershell
+node tests/integration.mjs --preview
+```
+
+ดูรายละเอียด schema/rules/routes ใน [ARCHITECTURE.md](docs/ARCHITECTURE.md), ขอบเขตความปลอดภัยใน [SECURITY.md](docs/SECURITY.md) และผลตรวจล่าสุดใน [HANDOFF.md](docs/HANDOFF.md)
+
+ยังไม่มี: หน้า Purchase/PO Tracking, Reports/PDF, Google Drive, email verification/reset, CI หรือชุด deploy production (ดูขอบเขตใน HANDOFF.md)

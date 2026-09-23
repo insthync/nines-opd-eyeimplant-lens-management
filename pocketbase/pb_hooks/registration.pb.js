@@ -1,6 +1,6 @@
 routerAdd(
   "POST",
-  "/api/starter/register",
+  "/api/eyeimplant/register",
   (e) => {
     const body = e.requestInfo().body || {};
     const name = String(body.name || "").trim();
