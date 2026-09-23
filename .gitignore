@@ -1,0 +1,13 @@
+pocketbase/pb_data/
+pocketbase/pocketbase
+pocketbase/pocketbase.exe
+pocketbase/*.zip
+**/pb_data/
+.env
+.env.*
+!.env.example
+backups/
+exports/
+*.log
+node_modules/
+.test-artifacts/

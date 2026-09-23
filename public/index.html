@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#156859"><title>รายการงาน · pb-crud-app-starter</title>
+  <link rel="stylesheet" href="styles.css?v=202609191219">
+  <script src="config.js?v=202609191219" defer></script>
+  <script src="api.js?v=202609191219" defer></script>
+  <script src="app.js?v=202609191219" defer></script>
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="./"><span class="mark">pb</span><span data-app-name>pb-crud-app-starter</span></a><div id="account" hidden><span id="account-name"></span><button id="logout" class="quiet">ออกจากระบบ</button></div></header>
+  <main>
+    <section id="login-panel" class="auth-card">
+      <p class="eyebrow">พื้นที่ทำงานของคุณ</p><h1>ยินดีต้อนรับกลับ</h1><p class="muted">เข้าสู่ระบบเพื่อดูและจัดการรายการงาน</p>
+      <form id="login-form">
+        <label>อีเมล<input name="identity" type="email" autocomplete="username" required></label>
+        <label>รหัสผ่าน<input name="password" type="password" autocomplete="current-password" required></label>
+        <p id="login-error" class="error" role="alert"></p><button type="submit">เข้าสู่ระบบ</button>
+      </form><p class="muted">ยังไม่มีบัญชี? <a href="register.html">สมัครสมาชิก</a></p>
+    </section>
+    <section id="workspace" hidden>
+      <nav aria-label="เมนูหลัก"><button id="items-tab" class="selected" aria-pressed="true">รายการงาน</button><button id="users-tab" class="quiet" aria-pressed="false" hidden>จัดการสมาชิก</button></nav>
+      <div class="page-heading"><div><p class="eyebrow">พื้นที่ทำงาน</p><h1 id="page-title">รายการงาน</h1><p id="page-description" class="muted">เก็บรายละเอียด ติดตามสถานะ และจัดการงานในที่เดียว</p></div><button id="add-case-button">+ เพิ่มรายการ</button></div>
+      <section class="panel">
+        <form id="search-form" class="toolbar" role="search"><label class="search-label"><span class="sr-only">ค้นหา</span><input id="search" type="search" placeholder="ค้นหาชื่อหรือรายละเอียด…" maxlength="200"></label><label id="status-filter-label"><span class="sr-only">สถานะ</span><select id="status-filter"><option value="">ทุกสถานะ</option value="todo">รอดำเนินการ</option><option value="doing">กำลังดำเนินการ</option><option value="done">เสร็จแล้ว</option></select></label><button class="secondary" type="submit">ค้นหา</button></form>
+        <p id="list-message" class="list-message" role="status"></p>
+        <div id="records" class="records"></div>
+        <footer class="pagination"><span id="page-info"></span><div><button id="previous" class="secondary">ก่อนหน้า</button><button id="next" class="secondary">ถัดไป</button></div></footer>
+      </section><p id="notice" class="notice" role="status" aria-live="polite"></p>
+    </section>
+  </main>
+  <dialog id="item-dialog" aria-labelledby="item-dialog-title"><form id="item-form">
+    <div class="dialog-heading"><h2 id="item-dialog-title">เพิ่มรายการ</h2><button type="button" class="quiet" data-close="item-dialog" aria-label="ปิด">✕</button></div>
+    <fieldset id="item-fields"><label>ชื่อรายการ<input name="title" maxlength="200" required></label><div class="form-grid"><label>จำนวน<input name="quantity" type="number" min="0" max="1000000" step="1" value="1" required></label><label>วันที่กำหนด<input name="due_date" type="date" min="0001-01-01" max="9999-12-31" required></label></div><label>สถานะ<select name="status"><option value="todo">รอดำเนินการ</option><option value="doing">กำลังดำเนินการ</option><option value="done">เสร็จแล้ว</option></select></label><label>รายละเอียด<textarea name="description" rows="5" maxlength="4000"></textarea></label></fieldset>
+    <p id="item-error" class="error" role="alert"></p><div class="dialog-actions"><button type="button" class="secondary" data-close="item-dialog">ปิด</button><button id="save-item" type="submit">บันทึก</button></div>
+  </form></dialog>
+  <dialog id="user-dialog" aria-labelledby="user-dialog-title"><form id="user-form"><div class="dialog-heading"><h2 id="user-dialog-title">แก้ไขสมาชิก</h2><button type="button" class="quiet" data-close="user-dialog" aria-label="ปิด">✕</button></div><label>ชื่อที่แสดง<input name="name" maxlength="120" required></label><label>สิทธิ์<select name="role"><option value="viewer">ผู้ชม (viewer)</option><option value="editor">ผู้แก้ไข (editor)</option><option value="admin">ผู้ดูแล (admin)</option></select></label><label class="checkbox"><input name="active" type="checkbox">เปิดใช้งานบัญชี</label><p class="muted">ผู้ดูแลจัดการบัญชีอื่นได้ ส่วนบัญชีของตนเองจัดการผ่าน PocketBase dashboard</p><p id="user-error" class="error" role="alert"></p><div class="dialog-actions"><button type="button" class="secondary" data-close="user-dialog">ยกเลิก</button><button type="submit">บันทึกสมาชิก</button></div></form></dialog>
+  <dialog id="delete-dialog" aria-labelledby="delete-title"><form id="delete-form"><h2 id="delete-title">ลบรายการนี้?</h2><p id="delete-name"></p><p class="muted">เมื่อลบแล้วจะไม่สามารถกู้คืนผ่านหน้าเว็บได้</p><p id="delete-error" class="error" role="alert"></p><div class="dialog-actions"><button type="button" class="secondary" data-close="delete-dialog">ยกเลิก</button><button class="danger" type="submit">ยืนยันการลบ</button></div></form></dialog>
+</body></html>
