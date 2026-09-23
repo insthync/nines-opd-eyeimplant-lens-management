@@ -162,6 +162,7 @@ main { display: block; }
 .section-heading { font-size: 15px; margin: 26px 0 12px; color: var(--blue-dark); letter-spacing: .2px; }
 .view > .section-heading:first-child, #view-dashboard > .section-heading:first-child { margin-top: 0; }
 .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; }
+.inventory-stats { margin-bottom: 22px; }
 .kpi-card { background: white; border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 6px; }
 .kpi-num { font-size: 28px; font-weight: 800; line-height: 1.2; overflow-wrap: anywhere; }
 .kpi-label { font-size: 13px; color: var(--muted); font-weight: 600; }
