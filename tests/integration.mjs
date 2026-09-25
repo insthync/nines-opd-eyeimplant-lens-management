@@ -126,7 +126,8 @@ try {
   check((await request("/api/eyeimplant/or-verify", "POST", { case: surgeryCase.id }, accounts.editor.token)).status === 400, "OR verify rejected before confirmation");
 
   // --- confirm blocked without stock, then receive stock and confirm ----------------------
-  check((await request("/api/eyeimplant/confirm", "POST", { reservation: reservation.id }, accounts.editor.token)).status === 400, "confirm rejected while out of stock");
+  const noStock = await request("/api/eyeimplant/confirm", "POST", { reservation: reservation.id }, accounts.editor.token);
+  check(noStock.status === 400 && /IOL-STD-22/.test(noStock.data?.message || ""), "out-of-stock confirm names the product code");
   check((await request("/api/eyeimplant/receive", "POST", { implant: implant.id, quantity: 0 }, accounts.editor.token)).status === 400, "receive rejects zero quantity");
   const lot = (await request("/api/eyeimplant/receive", "POST", { implant: implant.id, lot: "L2609A", expiry: localDate(400), quantity: 2, location: "ตู้แช่ A1" }, accounts.editor.token)).data;
   check(lot.id, "stock received");

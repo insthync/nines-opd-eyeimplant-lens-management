@@ -178,6 +178,8 @@
     renderSummary($("#confirm-summary"), reservation);
     const lotSelect = $("#confirm-lot");
     lotSelect.replaceChildren(new Option("ให้ระบบเลือกอัตโนมัติ (Lot ที่ใกล้หมดอายุที่สุดที่ใช้ได้)", ""));
+    const hint = $("#confirm-lot-hint");
+    const code = reservation.expand?.implant?.product_code || "-";
     try {
       const data = await API.records("stock_lots", { page: 1, perPage: 200, filter: `implant = ${quoted(reservation.implant)}` });
       const today = localDate();
@@ -187,9 +189,28 @@
       for (const lot of usable) {
         lotSelect.append(new Option(`Lot ${lot.lot || "-"} · หมดอายุ ${lot.expiry || "-"} · เหลือ ${lot.qty_physical - lot.qty_reserved} ชิ้น`, lot.id));
       }
-      if (!usable.length) $("#confirm-error").textContent = "ไม่มี Stock พอสำหรับ Implant นี้ (หรือ Lot หมดอายุทั้งหมด) — รับเข้าคลังก่อนยืนยัน";
-      else $("#confirm-error").textContent = "";
+      hint.replaceChildren();
+      if (!usable.length) {
+        // Show exactly why each lot is unusable so the nurse can act on it.
+        if (!data.items.length) {
+          hint.append(node("div", "", `ยังไม่มี Lot ของ ${code} ในคลัง — รับเข้าคลังก่อนยืนยัน หรือตรวจว่าการจองเลือก Implant ตัวเดียวกับที่รับเข้าจริง`));
+        } else {
+          hint.append(node("div", "", `Lot ของ ${code} ที่มีในคลังใช้ไม่ได้ทั้งหมด (ต้องการ ${reservation.quantity} ชิ้น):`));
+          for (const lot of data.items) {
+            const available = (lot.qty_physical || 0) - (lot.qty_reserved || 0);
+            const reason = lot.expiry && lot.expiry < today ? `🔴 หมดอายุแล้ว (${lot.expiry})`
+              : lot.expiry && lot.expiry === today ? `🔴 หมดอายุภายในวันนี้ (${lot.expiry})`
+              : `🟡 ถูกจองจนคงเหลือ ${available} ชิ้น ไม่พอ`;
+            hint.append(node("div", "", `Lot ${lot.lot || "-"} · จริง ${lot.qty_physical} / จอง ${lot.qty_reserved} · ${reason}`));
+          }
+        }
+        $("#confirm-error").textContent = "ไม่มี Stock ที่ใช้ได้ — ดูเหตุผลข้างต้น ต้องมี Lot พร้อมก่อนจึงยืนยันได้";
+      } else {
+        hint.append(node("div", "", 'เลือก "ให้ระบบเลือกอัตโนมัติ" เพื่อจองจาก Lot ที่ใกล้หมดอายุที่สุดที่ยังใช้ได้'));
+        $("#confirm-error").textContent = "";
+      }
     } catch (error) {
+      hint.replaceChildren();
       $("#confirm-error").textContent = error.message;
     }
     document.querySelectorAll(".safety-check").forEach((box) => { box.checked = false; });

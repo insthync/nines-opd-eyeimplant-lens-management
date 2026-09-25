@@ -109,7 +109,16 @@ routerAdd("POST", "/api/eyeimplant/{action}", (e) => {
         .filter((row) => !lotExpired(row, today) && lotAvailable(row) >= quantity)
         .sort((a, b) => (a.getString("expiry") || "9999-12-31").localeCompare(b.getString("expiry") || "9999-12-31"));
       lot = usable[0] || null;
-      if (!lot) throw new BadRequestError("ไม่มี Stock พอสำหรับ Implant นี้ กรุณารับเข้าคลังก่อนยืนยันการจอง");
+      if (!lot) {
+        let code = "-";
+        try { code = e.app.findRecordById("implants", reservation.getString("implant")).getString("product_code") || "-"; } catch {}
+        const expiredCount = lots.filter((row) => lotExpired(row, today)).length;
+        const shortCount = lots.length - expiredCount;
+        if (!lots.length) {
+          throw new BadRequestError(`ยังไม่มี Lot ของ ${code} ในคลัง กรุณารับเข้าคลังก่อนยืนยัน (ตรวจด้วยว่าการจองเลือก Implant ตัวเดียวกับที่รับเข้าจริง)`);
+        }
+        throw new BadRequestError(`Stock ที่ใช้ได้ของ ${code} ไม่พอ (มี ${lots.length} lot: หมดอายุ ${expiredCount} lot, คงเหลือไม่พอ ${shortCount} lot) กรุณาตรวจหน้าคลัง`);
+      }
     }
     const now = nowStamp();
     const chosenLotId = lot.id;
