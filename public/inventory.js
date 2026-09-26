@@ -121,6 +121,16 @@
     await baseReload();
   };
 
+  // Persistent receive button — per-row buttons only exist when lots already do.
+  const receiveHeader = node("div", "master-header");
+  receiveHeader.append(node("p", "muted", "รับ Implant เข้าคลังเพื่อให้ยืนยันการจองได้"));
+  const receiveButton = node("button", "", "รับ Implant เข้าคลัง");
+  receiveButton.type = "button";
+  receiveButton.addEventListener("click", () => openReceive());
+  receiveHeader.append(receiveButton);
+  const inventorySection = document.getElementById("view-inventory");
+  inventorySection.insertBefore(receiveHeader, inventorySection.querySelector(".panel"));
+
   // --- receive dialog -------------------------------------------------------------
   async function openReceive(implantId = "") {
     const form = $("#receive-form");
@@ -172,5 +182,11 @@
   }
 
   window.Views = window.Views || {};
-  window.Views.inventory = { load: () => list.reload(), openReceive };
+  window.Views.inventory = {
+    load: () => {
+      receiveButton.hidden = !canWrite();
+      list.reload();
+    },
+    openReceive,
+  };
 })();
