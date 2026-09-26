@@ -1,6 +1,7 @@
 # Documentation index
 
 - ../README.md: setup and use
+- SYSTEM.md: full system manual — data model, workflows, module guide, API, deployment, troubleshooting (Thai)
 - CUSTOMIZE.md: creating a new app, adding fields and changing access
 - ARCHITECTURE.md: frontend, schema, API, registration and roles
 - SECURITY.md: security boundaries and deployment considerations

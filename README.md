@@ -101,6 +101,6 @@ node tests/integration.mjs
 node tests/integration.mjs --preview
 ```
 
-ดูรายละเอียด schema/rules/routes ใน [ARCHITECTURE.md](docs/ARCHITECTURE.md), ขอบเขตความปลอดภัยใน [SECURITY.md](docs/SECURITY.md) และผลตรวจล่าสุดใน [HANDOFF.md](docs/HANDOFF.md)
+ดูรายละเอียด schema/rules/routes ใน [ARCHITECTURE.md](docs/ARCHITECTURE.md), ขอบเขตความปลอดภัยใน [SECURITY.md](docs/SECURITY.md), คู่มือระบบฉบับเต็ม (data model, workflow, คู่มือใช้งานทุกโมดูล, API, แก้ปัญหา) ใน [SYSTEM.md](docs/SYSTEM.md) และผลตรวจล่าสุดใน [HANDOFF.md](docs/HANDOFF.md)
 
 ยังไม่มี: หน้า Purchase/PO Tracking, Reports/PDF, Google Drive, email verification/reset, CI หรือชุด deploy production (ดูขอบเขตใน HANDOFF.md)
